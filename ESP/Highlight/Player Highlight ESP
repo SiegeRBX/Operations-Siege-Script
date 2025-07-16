@@ -1,0 +1,107 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local localPlayer = Players.LocalPlayer
+
+local ourHighlights = {}
+
+local function getTeamColors(player)
+    local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+    
+    if humanoid and humanoid.Health <= 0 then
+        return Color3.fromRGB(255, 255, 255), Color3.fromRGB(128, 128, 128)
+    end
+    
+    if not player.Team or not localPlayer.Team then
+        return Color3.fromRGB(255, 255, 255), Color3.fromRGB(128, 128, 128)
+    end
+    
+    if player.Team == localPlayer.Team and player ~= localPlayer then
+        return Color3.fromRGB(0, 100, 0), Color3.fromRGB(0, 255, 0)
+    elseif player.Team ~= localPlayer.Team then
+        return Color3.fromRGB(139, 0, 0), Color3.fromRGB(255, 0, 0)
+    else
+        return Color3.fromRGB(255, 255, 255), Color3.fromRGB(128, 128, 128)
+    end
+end
+
+local function removeExternalHighlights(character)
+    for _, child in pairs(character:GetChildren()) do
+        if child:IsA("Highlight") and not ourHighlights[child] then
+            child:Destroy()
+        end
+    end
+end
+
+local function updateHighlight(character, player)
+    removeExternalHighlights(character)
+    
+    local highlight = character:FindFirstChild("Highlight")
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.Parent = character
+        ourHighlights[highlight] = true
+    end
+    
+    local outlineColor, fillColor = getTeamColors(player)
+    highlight.OutlineColor = outlineColor
+    highlight.FillColor = fillColor
+end
+
+local function setupPlayer(player)
+    local function onCharacterAdded(character)
+        wait(0.1)
+        updateHighlight(character, player)
+        
+        local humanoid = character:WaitForChild("Humanoid")
+        humanoid.HealthChanged:Connect(function()
+            wait(0.1)
+            updateHighlight(character, player)
+        end)
+        
+        humanoid.Died:Connect(function()
+            updateHighlight(character, player)
+        end)
+        
+        character.ChildAdded:Connect(function(child)
+            if child:IsA("Highlight") and not ourHighlights[child] then
+                child:Destroy()
+            end
+        end)
+    end
+    
+    local function onTeamChanged()
+        if player.Character then
+            wait(0.1)
+            updateHighlight(player.Character, player)
+        end
+    end
+    
+    local function onLocalPlayerTeamChanged()
+        if player.Character then
+            wait(0.1)
+            updateHighlight(player.Character, player)
+        end
+    end
+    
+    player.CharacterAdded:Connect(onCharacterAdded)
+    player:GetPropertyChangedSignal("Team"):Connect(onTeamChanged)
+    localPlayer:GetPropertyChangedSignal("Team"):Connect(onLocalPlayerTeamChanged)
+    
+    if player.Character then
+        onCharacterAdded(player.Character)
+    end
+end
+
+RunService.Heartbeat:Connect(function()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character then
+            removeExternalHighlights(player.Character)
+        end
+    end
+end)
+
+for _, player in pairs(Players:GetPlayers()) do
+    setupPlayer(player)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
