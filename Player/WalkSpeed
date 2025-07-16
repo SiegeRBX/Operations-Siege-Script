@@ -1,0 +1,72 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local localPlayer = Players.LocalPlayer
+
+local desiredWalkSpeed = 16
+local connections = {}
+
+local function setWalkSpeed(speed)
+    if speed < 0 then speed = 0 end
+    desiredWalkSpeed = speed
+    
+    if localPlayer.Character and localPlayer.Character:FindFirstChild("Humanoid") then
+        localPlayer.Character.Humanoid.WalkSpeed = desiredWalkSpeed
+    end
+end
+
+local function applyWalkSpeed()
+    if localPlayer.Character and localPlayer.Character:FindFirstChild("Humanoid") then
+        local humanoid = localPlayer.Character.Humanoid
+        if humanoid.WalkSpeed ~= desiredWalkSpeed then
+            humanoid.WalkSpeed = desiredWalkSpeed
+        end
+    end
+end
+
+local function setupCharacter(character)
+    local humanoid = character:WaitForChild("Humanoid")
+    
+    humanoid.WalkSpeed = desiredWalkSpeed
+    
+    if connections.walkSpeedConnection then
+        connections.walkSpeedConnection:Disconnect()
+    end
+    
+    connections.walkSpeedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+        if humanoid.WalkSpeed ~= desiredWalkSpeed then
+            humanoid.WalkSpeed = desiredWalkSpeed
+        end
+    end)
+    
+    connections.childAddedConnection = character.ChildAdded:Connect(function(child)
+        if child.Name == "Humanoid" then
+            wait(0.1)
+            child.WalkSpeed = desiredWalkSpeed
+            
+            child:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+                if child.WalkSpeed ~= desiredWalkSpeed then
+                    child.WalkSpeed = desiredWalkSpeed
+                end
+            end)
+        end
+    end)
+end
+
+local function onCharacterAdded(character)
+    setupCharacter(character)
+end
+
+if localPlayer.Character then
+    setupCharacter(localPlayer.Character)
+end
+
+localPlayer.CharacterAdded:Connect(onCharacterAdded)
+
+connections.heartbeatConnection = RunService.Heartbeat:Connect(applyWalkSpeed)
+
+getgenv().setWalkSpeed = setWalkSpeed
+getgenv().getWalkSpeed = function()
+    return desiredWalkSpeed
+end
+
+setWalkSpeed(16)
