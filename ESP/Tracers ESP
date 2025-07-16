@@ -1,0 +1,122 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local localPlayer = Players.LocalPlayer
+
+local tracers = {}
+
+local function getTeamColor(player)
+    local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+    
+    if humanoid and humanoid.Health <= 0 then
+        return Color3.fromRGB(255, 255, 255)
+    end
+    
+    if not player.Team or not localPlayer.Team then
+        return Color3.fromRGB(255, 255, 255)
+    end
+    
+    if player.Team == localPlayer.Team and player ~= localPlayer then
+        return Color3.fromRGB(0, 255, 0)
+    elseif player.Team ~= localPlayer.Team then
+        return Color3.fromRGB(255, 0, 0)
+    else
+        return Color3.fromRGB(255, 255, 255)
+    end
+end
+
+local function createTracer()
+    local tracer = Drawing.new("Line")
+    tracer.Thickness = 1
+    tracer.Transparency = 1
+    tracer.Visible = false
+    return tracer
+end
+
+local function updateTracer(player, tracer)
+    if not player.Character then
+        tracer.Visible = false
+        return
+    end
+    
+    local head = player.Character:FindFirstChild("Head")
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    
+    if not head then
+        tracer.Visible = false
+        return
+    end
+    
+    local headPosition = head.Position
+    local headScreen, headVisible = Camera:WorldToViewportPoint(headPosition)
+    
+    if headVisible and headScreen.Z > 0 then
+        local screenSize = Camera.ViewportSize
+        local bottomCenter = Vector2.new(screenSize.X / 2, screenSize.Y)
+        
+        tracer.From = bottomCenter
+        tracer.To = Vector2.new(headScreen.X, headScreen.Y)
+        tracer.Color = getTeamColor(player)
+        tracer.Visible = true
+    else
+        tracer.Visible = false
+    end
+end
+
+local function removeTracer(tracer)
+    if tracer then
+        tracer:Remove()
+    end
+end
+
+local function setupPlayer(player)
+    if player == localPlayer then return end
+    
+    local tracer = createTracer()
+    tracers[player] = tracer
+    
+    local function onCharacterAdded(character)
+        wait(0.1)
+    end
+    
+    local function onTeamChanged()
+        wait(0.1)
+    end
+    
+    local function onLocalPlayerTeamChanged()
+        wait(0.1)
+    end
+    
+    player.CharacterAdded:Connect(onCharacterAdded)
+    player:GetPropertyChangedSignal("Team"):Connect(onTeamChanged)
+    localPlayer:GetPropertyChangedSignal("Team"):Connect(onLocalPlayerTeamChanged)
+    
+    if player.Character then
+        onCharacterAdded(player.Character)
+    end
+end
+
+local function removePlayer(player)
+    if tracers[player] then
+        removeTracer(tracers[player])
+        tracers[player] = nil
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    for player, tracer in pairs(tracers) do
+        if Players:FindFirstChild(player.Name) then
+            updateTracer(player, tracer)
+        else
+            removeTracer(tracer)
+            tracers[player] = nil
+        end
+    end
+end)
+
+for _, player in pairs(Players:GetPlayers()) do
+    setupPlayer(player)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
+Players.PlayerRemoving:Connect(removePlayer)
