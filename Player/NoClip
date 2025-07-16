@@ -1,0 +1,129 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local localPlayer = Players.LocalPlayer
+
+local noclipEnabled = true
+local connections = {}
+local partConnections = {}
+
+local function enableNoclip()
+    noclipEnabled = true
+    if localPlayer.Character then
+        applyNoclip(localPlayer.Character)
+    end
+end
+
+local function disableNoclip()
+    noclipEnabled = false
+    if localPlayer.Character then
+        removeNoclip(localPlayer.Character)
+    end
+end
+
+local function applyNoclip(character)
+    if not noclipEnabled then return end
+    
+    for _, part in pairs(character:GetChildren()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+            
+            if partConnections[part] then
+                partConnections[part]:Disconnect()
+            end
+            
+            partConnections[part] = part:GetPropertyChangedSignal("CanCollide"):Connect(function()
+                if noclipEnabled and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end)
+        end
+    end
+end
+
+local function removeNoclip(character)
+    for _, part in pairs(character:GetChildren()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = true
+            
+            if partConnections[part] then
+                partConnections[part]:Disconnect()
+                partConnections[part] = nil
+            end
+        end
+    end
+end
+
+local function setupCharacter(character)
+    if connections.childAddedConnection then
+        connections.childAddedConnection:Disconnect()
+    end
+    if connections.childRemovedConnection then
+        connections.childRemovedConnection:Disconnect()
+    end
+    
+    connections.childAddedConnection = character.ChildAdded:Connect(function(child)
+        if child:IsA("BasePart") and noclipEnabled then
+            wait(0.1)
+            child.CanCollide = false
+            
+            if partConnections[child] then
+                partConnections[child]:Disconnect()
+            end
+            
+            partConnections[child] = child:GetPropertyChangedSignal("CanCollide"):Connect(function()
+                if noclipEnabled and child.CanCollide then
+                    child.CanCollide = false
+                end
+            end)
+        end
+    end)
+    
+    connections.childRemovedConnection = character.ChildRemoved:Connect(function(child)
+        if partConnections[child] then
+            partConnections[child]:Disconnect()
+            partConnections[child] = nil
+        end
+    end)
+    
+    if noclipEnabled then
+        applyNoclip(character)
+    end
+end
+
+local function onCharacterAdded(character)
+    setupCharacter(character)
+end
+
+local function onCharacterRemoving(character)
+    for part, connection in pairs(partConnections) do
+        if part.Parent == character then
+            connection:Disconnect()
+            partConnections[part] = nil
+        end
+    end
+end
+
+if localPlayer.Character then
+    setupCharacter(localPlayer.Character)
+end
+
+localPlayer.CharacterAdded:Connect(onCharacterAdded)
+localPlayer.CharacterRemoving:Connect(onCharacterRemoving)
+
+connections.heartbeatConnection = RunService.Heartbeat:Connect(function()
+    if noclipEnabled and localPlayer.Character then
+        for _, part in pairs(localPlayer.Character:GetChildren()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+getgenv().enableNoclip = enableNoclip
+getgenv().disableNoclip = disableNoclip
+getgenv().isNoclipEnabled = function()
+    return noclipEnabled
+end
+
+enableNoclip()
