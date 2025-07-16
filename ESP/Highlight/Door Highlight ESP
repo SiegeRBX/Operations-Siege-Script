@@ -1,0 +1,71 @@
+local RunService = game:GetService("RunService")
+local workspace = game:GetService("Workspace")
+
+local doorHighlights = {}
+local ourHighlights = {}
+local doorsFolder = workspace:WaitForChild("SE_Workspace"):WaitForChild("Doors")
+
+local function removeExternalHighlights(door)
+    for _, child in pairs(door:GetChildren()) do
+        if child:IsA("Highlight") and not ourHighlights[child] then
+            child:Destroy()
+        end
+    end
+end
+
+local function addDoorHighlight(door)
+    removeExternalHighlights(door)
+    
+    local highlight = door:FindFirstChild("Highlight")
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.OutlineColor = Color3.fromRGB(205, 133, 63)
+        highlight.FillColor = Color3.fromRGB(245, 245, 220)
+        highlight.OutlineTransparency = 0.3
+        highlight.FillTransparency = 0.7
+        highlight.Parent = door
+        ourHighlights[highlight] = true
+        doorHighlights[door] = highlight
+    end
+end
+
+local function setupDoor(door)
+    addDoorHighlight(door)
+    
+    door.ChildAdded:Connect(function(child)
+        if child:IsA("Highlight") and not ourHighlights[child] then
+            child:Destroy()
+        end
+    end)
+end
+
+local function setupDoors()
+    for _, door in pairs(doorsFolder:GetChildren()) do
+        if door:IsA("Model") then
+            setupDoor(door)
+        end
+    end
+end
+
+doorsFolder.ChildAdded:Connect(function(child)
+    if child:IsA("Model") then
+        setupDoor(child)
+    end
+end)
+
+doorsFolder.ChildRemoved:Connect(function(child)
+    if doorHighlights[child] then
+        doorHighlights[child] = nil
+        ourHighlights[doorHighlights[child]] = nil
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    for _, door in pairs(doorsFolder:GetChildren()) do
+        if door:IsA("Model") then
+            removeExternalHighlights(door)
+        end
+    end
+end)
+
+setupDoors()
