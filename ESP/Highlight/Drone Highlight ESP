@@ -1,0 +1,38 @@
+local RunService = game:GetService("RunService")
+local workspace = game:GetService("Workspace")
+
+local droneHighlights = {}
+local dronesFolder = workspace:WaitForChild("SE_Workspace"):WaitForChild("Drones")
+
+local function addDroneHighlight(drone)
+    local highlight = drone:FindFirstChild("Highlight")
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.OutlineColor = Color3.fromRGB(255, 140, 0)
+        highlight.FillColor = Color3.fromRGB(255, 165, 0)
+        highlight.Parent = drone
+        droneHighlights[drone] = highlight
+    end
+end
+
+local function setupDrones()
+    for _, drone in pairs(dronesFolder:GetChildren()) do
+        if drone:IsA("Model") then
+            addDroneHighlight(drone)
+        end
+    end
+end
+
+dronesFolder.ChildAdded:Connect(function(child)
+    if child:IsA("Model") then
+        addDroneHighlight(child)
+    end
+end)
+
+dronesFolder.ChildRemoved:Connect(function(child)
+    if droneHighlights[child] then
+        droneHighlights[child] = nil
+    end
+end)
+
+setupDrones()
