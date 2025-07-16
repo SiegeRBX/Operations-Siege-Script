@@ -1,0 +1,122 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local localPlayer = Players.LocalPlayer
+
+local nametags = {}
+
+local function getTeamColor(player)
+    local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+    
+    if humanoid and humanoid.Health <= 0 then
+        return Color3.fromRGB(255, 255, 255)
+    end
+    
+    if not player.Team or not localPlayer.Team then
+        return Color3.fromRGB(255, 255, 255)
+    end
+    
+    if player.Team == localPlayer.Team and player ~= localPlayer then
+        return Color3.fromRGB(0, 255, 0)
+    elseif player.Team ~= localPlayer.Team then
+        return Color3.fromRGB(255, 0, 0)
+    else
+        return Color3.fromRGB(255, 255, 255)
+    end
+end
+
+local function createNametag(player)
+    local nametag = Drawing.new("Text")
+    nametag.Text = player.Name
+    nametag.Size = 16
+    nametag.Center = true
+    nametag.Outline = true
+    nametag.OutlineColor = Color3.fromRGB(0, 0, 0)
+    nametag.Font = 2
+    nametag.Visible = false
+    return nametag
+end
+
+local function updateNametag(player, nametag)
+    if not player.Character then
+        nametag.Visible = false
+        return
+    end
+    
+    local head = player.Character:FindFirstChild("Head")
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    
+    if not head then
+        nametag.Visible = false
+        return
+    end
+    
+    local headPosition = head.Position + Vector3.new(0, 3, 0)
+    local headScreen, headVisible = Camera:WorldToViewportPoint(headPosition)
+    
+    if headVisible and headScreen.Z > 0 then
+        nametag.Position = Vector2.new(headScreen.X, headScreen.Y)
+        nametag.Color = getTeamColor(player)
+        nametag.Visible = true
+    else
+        nametag.Visible = false
+    end
+end
+
+local function removeNametag(nametag)
+    if nametag then
+        nametag:Remove()
+    end
+end
+
+local function setupPlayer(player)
+    if player == localPlayer then return end
+    
+    local nametag = createNametag(player)
+    nametags[player] = nametag
+    
+    local function onCharacterAdded(character)
+        wait(0.1)
+    end
+    
+    local function onTeamChanged()
+        wait(0.1)
+    end
+    
+    local function onLocalPlayerTeamChanged()
+        wait(0.1)
+    end
+    
+    player.CharacterAdded:Connect(onCharacterAdded)
+    player:GetPropertyChangedSignal("Team"):Connect(onTeamChanged)
+    localPlayer:GetPropertyChangedSignal("Team"):Connect(onLocalPlayerTeamChanged)
+    
+    if player.Character then
+        onCharacterAdded(player.Character)
+    end
+end
+
+local function removePlayer(player)
+    if nametags[player] then
+        removeNametag(nametags[player])
+        nametags[player] = nil
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    for player, nametag in pairs(nametags) do
+        if Players:FindFirstChild(player.Name) then
+            updateNametag(player, nametag)
+        else
+            removeNametag(nametag)
+            nametags[player] = nil
+        end
+    end
+end)
+
+for _, player in pairs(Players:GetPlayers()) do
+    setupPlayer(player)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
+Players.PlayerRemoving:Connect(removePlayer)
