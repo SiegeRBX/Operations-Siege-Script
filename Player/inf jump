@@ -1,0 +1,93 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local localPlayer = Players.LocalPlayer
+
+local infiniteJumpEnabled = true
+local connections = {}
+
+local function enableInfiniteJump()
+    infiniteJumpEnabled = true
+end
+
+local function disableInfiniteJump()
+    infiniteJumpEnabled = false
+end
+
+local function onKeyDown(key)
+    if not infiniteJumpEnabled then return end
+    
+    if key.KeyCode == Enum.KeyCode.Space then
+        local character = localPlayer.Character
+        if character and character:FindFirstChild("Humanoid") then
+            local humanoid = character.Humanoid
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end
+
+local function setupCharacter(character)
+    local humanoid = character:WaitForChild("Humanoid")
+    
+    if connections.jumpConnection then
+        connections.jumpConnection:Disconnect()
+    end
+    
+    connections.jumpConnection = humanoid.StateChanged:Connect(function(oldState, newState)
+        if infiniteJumpEnabled and newState == Enum.HumanoidStateType.Landed then
+            wait(0.1)
+            if infiniteJumpEnabled then
+                humanoid:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end
+    end)
+    
+    connections.childAddedConnection = character.ChildAdded:Connect(function(child)
+        if child.Name == "Humanoid" then
+            wait(0.1)
+            if infiniteJumpEnabled then
+                child.StateChanged:Connect(function(oldState, newState)
+                    if newState == Enum.HumanoidStateType.Landed then
+                        wait(0.1)
+                        if infiniteJumpEnabled then
+                            child:ChangeState(Enum.HumanoidStateType.Running)
+                        end
+                    end
+                end)
+            end
+        end
+    end)
+end
+
+local function onCharacterAdded(character)
+    setupCharacter(character)
+end
+
+if connections.inputConnection then
+    connections.inputConnection:Disconnect()
+end
+
+connections.inputConnection = UserInputService.InputBegan:Connect(onKeyDown)
+
+if localPlayer.Character then
+    setupCharacter(localPlayer.Character)
+end
+
+localPlayer.CharacterAdded:Connect(onCharacterAdded)
+
+connections.heartbeatConnection = RunService.Heartbeat:Connect(function()
+    if infiniteJumpEnabled and localPlayer.Character and localPlayer.Character:FindFirstChild("Humanoid") then
+        local humanoid = localPlayer.Character.Humanoid
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            humanoid.Jump = true
+        end
+    end
+end)
+
+getgenv().enableInfiniteJump = enableInfiniteJump
+getgenv().disableInfiniteJump = disableInfiniteJump
+getgenv().isInfiniteJumpEnabled = function()
+    return infiniteJumpEnabled
+end
+
+enableInfiniteJump()
