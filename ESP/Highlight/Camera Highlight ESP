@@ -1,0 +1,155 @@
+local RunService = game:GetService("RunService")
+local workspace = game:GetService("Workspace")
+
+local cameraHighlights = {}
+local ourHighlights = {}
+local camerasFolder = workspace:WaitForChild("SE_Workspace"):WaitForChild("Cameras")
+
+local function removeExternalHighlights(camera)
+    for _, child in pairs(camera:GetChildren()) do
+        if child:IsA("Highlight") and not ourHighlights[child] then
+            child:Destroy()
+        end
+    end
+end
+
+local function updateCameraHighlight(camera)
+    removeExternalHighlights(camera)
+    
+    local humanoid = camera:FindFirstChild("Humanoid")
+    if not humanoid then
+        local highlight = camera:FindFirstChild("Highlight")
+        if not highlight then
+            highlight = Instance.new("Highlight")
+            highlight.OutlineColor = Color3.fromRGB(0, 0, 139)
+            highlight.FillColor = Color3.fromRGB(173, 216, 230)
+            highlight.Parent = camera
+            ourHighlights[highlight] = true
+            cameraHighlights[camera] = highlight
+        end
+        return
+    end
+    
+    local gameObj = humanoid:FindFirstChild("Game")
+    if not gameObj then
+        local highlight = camera:FindFirstChild("Highlight")
+        if not highlight then
+            highlight = Instance.new("Highlight")
+            highlight.OutlineColor = Color3.fromRGB(0, 0, 139)
+            highlight.FillColor = Color3.fromRGB(173, 216, 230)
+            highlight.Parent = camera
+            ourHighlights[highlight] = true
+            cameraHighlights[camera] = highlight
+        end
+        return
+    end
+    
+    local healthValue = gameObj:GetAttribute("Health")
+    if not healthValue then
+        local healthObj = gameObj:FindFirstChild("Health")
+        if healthObj then
+            healthValue = healthObj.Value
+        else
+            healthValue = 1
+        end
+    end
+    
+    if healthValue == 0 then
+        local existingHighlight = camera:FindFirstChild("Highlight")
+        if existingHighlight and ourHighlights[existingHighlight] then
+            existingHighlight:Destroy()
+            ourHighlights[existingHighlight] = nil
+            cameraHighlights[camera] = nil
+        end
+    else
+        local highlight = camera:FindFirstChild("Highlight")
+        if not highlight then
+            highlight = Instance.new("Highlight")
+            highlight.OutlineColor = Color3.fromRGB(0, 0, 139)
+            highlight.FillColor = Color3.fromRGB(173, 216, 230)
+            highlight.Parent = camera
+            ourHighlights[highlight] = true
+            cameraHighlights[camera] = highlight
+        end
+    end
+end
+
+local function setupCamera(camera)
+    updateCameraHighlight(camera)
+    
+    local function connectHealthChanges()
+        local humanoid = camera:FindFirstChild("Humanoid")
+        if humanoid then
+            local gameObj = humanoid:FindFirstChild("Game")
+            if gameObj then
+                gameObj:GetAttributeChangedSignal("Health"):Connect(function()
+                    updateCameraHighlight(camera)
+                end)
+                
+                local healthObj = gameObj:FindFirstChild("Health")
+                if healthObj then
+                    healthObj:GetPropertyChangedSignal("Value"):Connect(function()
+                        updateCameraHighlight(camera)
+                    end)
+                end
+                
+                gameObj.ChildAdded:Connect(function(child)
+                    if child.Name == "Health" then
+                        child:GetPropertyChangedSignal("Value"):Connect(function()
+                            updateCameraHighlight(camera)
+                        end)
+                    end
+                end)
+            end
+            
+            humanoid.ChildAdded:Connect(function(child)
+                if child.Name == "Game" then
+                    updateCameraHighlight(camera)
+                    connectHealthChanges()
+                end
+            end)
+        end
+    end
+    
+    connectHealthChanges()
+    
+    camera.ChildAdded:Connect(function(child)
+        if child:IsA("Highlight") and not ourHighlights[child] then
+            child:Destroy()
+        elseif child.Name == "Humanoid" then
+            updateCameraHighlight(camera)
+            connectHealthChanges()
+        end
+    end)
+end
+
+local function setupCameras()
+    for _, camera in pairs(camerasFolder:GetChildren()) do
+        if camera:IsA("Model") then
+            setupCamera(camera)
+        end
+    end
+end
+
+camerasFolder.ChildAdded:Connect(function(child)
+    if child:IsA("Model") then
+        setupCamera(child)
+    end
+end)
+
+camerasFolder.ChildRemoved:Connect(function(child)
+    if cameraHighlights[child] then
+        cameraHighlights[child] = nil
+        ourHighlights[cameraHighlights[child]] = nil
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    for _, camera in pairs(camerasFolder:GetChildren()) do
+        if camera:IsA("Model") then
+            removeExternalHighlights(camera)
+        end
+    end
+end)
+
+setupCameras()
