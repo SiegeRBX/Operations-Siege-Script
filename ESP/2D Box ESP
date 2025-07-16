@@ -1,0 +1,158 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local localPlayer = Players.LocalPlayer
+
+local boxes = {}
+
+local function getTeamColor(player)
+    local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+    
+    if humanoid and humanoid.Health <= 0 then
+        return Color3.fromRGB(255, 255, 255)
+    end
+    
+    if not player.Team or not localPlayer.Team then
+        return Color3.fromRGB(255, 255, 255)
+    end
+    
+    if player.Team == localPlayer.Team and player ~= localPlayer then
+        return Color3.fromRGB(0, 255, 0)
+    elseif player.Team ~= localPlayer.Team then
+        return Color3.fromRGB(255, 0, 0)
+    else
+        return Color3.fromRGB(255, 255, 255)
+    end
+end
+
+local function createBox()
+    local box = {}
+    
+    for i = 1, 4 do
+        box[i] = Drawing.new("Line")
+        box[i].Thickness = 1
+        box[i].Transparency = 1
+        box[i].Visible = false
+    end
+    
+    return box
+end
+
+local function updateBox(player, box)
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        for i = 1, 4 do
+            box[i].Visible = false
+        end
+        return
+    end
+    
+    local humanoidRootPart = player.Character.HumanoidRootPart
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    
+    if not humanoid or humanoid.Health <= 0 then
+        local color = getTeamColor(player)
+        for i = 1, 4 do
+            box[i].Color = color
+        end
+    else
+        local color = getTeamColor(player)
+        for i = 1, 4 do
+            box[i].Color = color
+        end
+    end
+    
+    local rootPosition = humanoidRootPart.Position
+    local rootSize = humanoidRootPart.Size
+    
+    local topLeft = rootPosition + Vector3.new(-rootSize.X/2, rootSize.Y/2 + 2, 0)
+    local topRight = rootPosition + Vector3.new(rootSize.X/2, rootSize.Y/2 + 2, 0)
+    local bottomLeft = rootPosition + Vector3.new(-rootSize.X/2, -rootSize.Y/2 - 2, 0)
+    local bottomRight = rootPosition + Vector3.new(rootSize.X/2, -rootSize.Y/2 - 2, 0)
+    
+    local topLeftScreen, topLeftVisible = Camera:WorldToViewportPoint(topLeft)
+    local topRightScreen, topRightVisible = Camera:WorldToViewportPoint(topRight)
+    local bottomLeftScreen, bottomLeftVisible = Camera:WorldToViewportPoint(bottomLeft)
+    local bottomRightScreen, bottomRightVisible = Camera:WorldToViewportPoint(bottomRight)
+    
+    if topLeftVisible and topRightVisible and bottomLeftVisible and bottomRightVisible then
+        box[1].From = Vector2.new(topLeftScreen.X, topLeftScreen.Y)
+        box[1].To = Vector2.new(topRightScreen.X, topRightScreen.Y)
+        
+        box[2].From = Vector2.new(topRightScreen.X, topRightScreen.Y)
+        box[2].To = Vector2.new(bottomRightScreen.X, bottomRightScreen.Y)
+        
+        box[3].From = Vector2.new(bottomRightScreen.X, bottomRightScreen.Y)
+        box[3].To = Vector2.new(bottomLeftScreen.X, bottomLeftScreen.Y)
+        
+        box[4].From = Vector2.new(bottomLeftScreen.X, bottomLeftScreen.Y)
+        box[4].To = Vector2.new(topLeftScreen.X, topLeftScreen.Y)
+        
+        for i = 1, 4 do
+            box[i].Visible = true
+        end
+    else
+        for i = 1, 4 do
+            box[i].Visible = false
+        end
+    end
+end
+
+local function removeBox(box)
+    for i = 1, 4 do
+        if box[i] then
+            box[i]:Remove()
+        end
+    end
+end
+
+local function setupPlayer(player)
+    if player == localPlayer then return end
+    
+    local box = createBox()
+    boxes[player] = box
+    
+    local function onCharacterAdded(character)
+        wait(0.1)
+    end
+    
+    local function onTeamChanged()
+        wait(0.1)
+    end
+    
+    local function onLocalPlayerTeamChanged()
+        wait(0.1)
+    end
+    
+    player.CharacterAdded:Connect(onCharacterAdded)
+    player:GetPropertyChangedSignal("Team"):Connect(onTeamChanged)
+    localPlayer:GetPropertyChangedSignal("Team"):Connect(onLocalPlayerTeamChanged)
+    
+    if player.Character then
+        onCharacterAdded(player.Character)
+    end
+end
+
+local function removePlayer(player)
+    if boxes[player] then
+        removeBox(boxes[player])
+        boxes[player] = nil
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    for player, box in pairs(boxes) do
+        if Players:FindFirstChild(player.Name) then
+            updateBox(player, box)
+        else
+            removeBox(box)
+            boxes[player] = nil
+        end
+    end
+end)
+
+for _, player in pairs(Players:GetPlayers()) do
+    setupPlayer(player)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
+Players.PlayerRemoving:Connect(removePlayer)
