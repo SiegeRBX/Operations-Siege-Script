@@ -1,0 +1,71 @@
+local RunService = game:GetService("RunService")
+local workspace = game:GetService("Workspace")
+
+local breachHighlights = {}
+local ourHighlights = {}
+local breachFolder = workspace:WaitForChild("SE_Workspace"):WaitForChild("Breach")
+
+local function removeExternalHighlights(breach)
+    for _, child in pairs(breach:GetChildren()) do
+        if child:IsA("Highlight") and not ourHighlights[child] then
+            child:Destroy()
+        end
+    end
+end
+
+local function addBreachHighlight(breach)
+    removeExternalHighlights(breach)
+    
+    local highlight = breach:FindFirstChild("Highlight")
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.OutlineColor = Color3.fromRGB(184, 134, 11)
+        highlight.FillColor = Color3.fromRGB(244, 164, 96)
+        highlight.OutlineTransparency = 0.3
+        highlight.FillTransparency = 0.7
+        highlight.Parent = breach
+        ourHighlights[highlight] = true
+        breachHighlights[breach] = highlight
+    end
+end
+
+local function setupBreach(breach)
+    addBreachHighlight(breach)
+    
+    breach.ChildAdded:Connect(function(child)
+        if child:IsA("Highlight") and not ourHighlights[child] then
+            child:Destroy()
+        end
+    end)
+end
+
+local function setupBreaches()
+    for _, breach in pairs(breachFolder:GetChildren()) do
+        if breach:IsA("Model") then
+            setupBreach(breach)
+        end
+    end
+end
+
+breachFolder.ChildAdded:Connect(function(child)
+    if child:IsA("Model") then
+        setupBreach(child)
+    end
+end)
+
+breachFolder.ChildRemoved:Connect(function(child)
+    if breachHighlights[child] then
+        breachHighlights[child] = nil
+        ourHighlights[breachHighlights[child]] = nil
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    for _, breach in pairs(breachFolder:GetChildren()) do
+        if breach:IsA("Model") then
+            removeExternalHighlights(breach)
+        end
+    end
+end)
+
+setupBreaches()
