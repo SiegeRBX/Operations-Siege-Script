@@ -1,0 +1,94 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local localPlayer = Players.LocalPlayer
+
+local desiredJumpHeight = 50
+local connections = {}
+
+local function setJumpHeight(height)
+    if height < 0 then height = 0 end
+    desiredJumpHeight = height
+    
+    if localPlayer.Character and localPlayer.Character:FindFirstChild("Humanoid") then
+        local humanoid = localPlayer.Character.Humanoid
+        humanoid.JumpHeight = desiredJumpHeight
+        humanoid.JumpPower = desiredJumpHeight
+    end
+end
+
+local function applyJumpHeight()
+    if localPlayer.Character and localPlayer.Character:FindFirstChild("Humanoid") then
+        local humanoid = localPlayer.Character.Humanoid
+        if humanoid.JumpHeight ~= desiredJumpHeight then
+            humanoid.JumpHeight = desiredJumpHeight
+        end
+        if humanoid.JumpPower ~= desiredJumpHeight then
+            humanoid.JumpPower = desiredJumpHeight
+        end
+    end
+end
+
+local function setupCharacter(character)
+    local humanoid = character:WaitForChild("Humanoid")
+    
+    humanoid.JumpHeight = desiredJumpHeight
+    humanoid.JumpPower = desiredJumpHeight
+    
+    if connections.jumpHeightConnection then
+        connections.jumpHeightConnection:Disconnect()
+    end
+    if connections.jumpPowerConnection then
+        connections.jumpPowerConnection:Disconnect()
+    end
+    
+    connections.jumpHeightConnection = humanoid:GetPropertyChangedSignal("JumpHeight"):Connect(function()
+        if humanoid.JumpHeight ~= desiredJumpHeight then
+            humanoid.JumpHeight = desiredJumpHeight
+        end
+    end)
+    
+    connections.jumpPowerConnection = humanoid:GetPropertyChangedSignal("JumpPower"):Connect(function()
+        if humanoid.JumpPower ~= desiredJumpHeight then
+            humanoid.JumpPower = desiredJumpHeight
+        end
+    end)
+    
+    connections.childAddedConnection = character.ChildAdded:Connect(function(child)
+        if child.Name == "Humanoid" then
+            wait(0.1)
+            child.JumpHeight = desiredJumpHeight
+            child.JumpPower = desiredJumpHeight
+            
+            child:GetPropertyChangedSignal("JumpHeight"):Connect(function()
+                if child.JumpHeight ~= desiredJumpHeight then
+                    child.JumpHeight = desiredJumpHeight
+                end
+            end)
+            
+            child:GetPropertyChangedSignal("JumpPower"):Connect(function()
+                if child.JumpPower ~= desiredJumpHeight then
+                    child.JumpPower = desiredJumpHeight
+                end
+            end)
+        end
+    end)
+end
+
+local function onCharacterAdded(character)
+    setupCharacter(character)
+end
+
+if localPlayer.Character then
+    setupCharacter(localPlayer.Character)
+end
+
+localPlayer.CharacterAdded:Connect(onCharacterAdded)
+
+connections.heartbeatConnection = RunService.Heartbeat:Connect(applyJumpHeight)
+
+getgenv().setJumpHeight = setJumpHeight
+getgenv().getJumpHeight = function()
+    return desiredJumpHeight
+end
+
+setJumpHeight(50)
