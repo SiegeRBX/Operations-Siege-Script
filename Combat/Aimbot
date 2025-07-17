@@ -1,0 +1,281 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local localPlayer = Players.LocalPlayer
+
+-- AIMBOT SETTINGS --
+local AIMBOT_ENABLED = true
+local AIMBOT_KEY = Enum.UserInputType.MouseButton2
+local MAX_FOV = 300
+local SMOOTHNESS = 0.25
+local INSTANT_SNAP = true
+local WALL_CHECK = true
+local TEAM_CHECK = true
+local TARGET_HEAD = true
+local VISIBLE_CHECK = true
+local FRONT_CHECK = false
+
+-- Internal Variables --
+local aimbotActive = false
+local targetPlayer = nil
+local currentTarget = nil
+
+local function getScreenDistance(screenPos1, screenPos2)
+    return (screenPos1 - screenPos2).Magnitude
+end
+
+local function getPlayerFromModel(model)
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character == model then
+            return player
+        end
+    end
+    return nil
+end
+
+local function isPlayerModel(model)
+    if not model:IsA("Model") then return false end
+    if not model:FindFirstChild("Head") then return false end
+    if not model:FindFirstChild("HumanoidRootPart") then return false end
+    if not model:FindFirstChild("Humanoid") then return false end
+    if model == localPlayer.Character then return false end
+    return true
+end
+
+local function isPlayerInFront(model)
+    if not FRONT_CHECK then return true end
+    if not localPlayer.Character or not localPlayer.Character:FindFirstChild("Head") then
+        return false
+    end
+    
+    local localHead = localPlayer.Character.Head
+    local playerHead = model:FindFirstChild("Head")
+    if not playerHead then return false end
+    
+    local cameraLookVector = Camera.CFrame.LookVector
+    local directionToPlayer = (playerHead.Position - localHead.Position).Unit
+    
+    local dotProduct = cameraLookVector:Dot(directionToPlayer)
+    return dotProduct > 0
+end
+
+local function isPlayerVisible(model)
+    if not VISIBLE_CHECK then return true end
+    local head = model:FindFirstChild("Head")
+    if not head then return false end
+    
+    local headPosition = head.Position
+    local _, onScreen = Camera:WorldToViewportPoint(headPosition)
+    
+    return onScreen
+end
+
+local function hasWallBetween(model)
+    if not WALL_CHECK then return false end
+    if not localPlayer.Character or not localPlayer.Character:FindFirstChild("Head") then
+        return true
+    end
+    
+    local playerHead = model:FindFirstChild("Head")
+    if not playerHead then return true end
+    
+    local localHead = localPlayer.Character.Head
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {localPlayer.Character, model}
+    
+    local raycastResult = workspace:Raycast(localHead.Position, (playerHead.Position - localHead.Position), raycastParams)
+    
+    return raycastResult ~= nil
+end
+
+local function isTeammate(model)
+    if not TEAM_CHECK then return false end
+    local player = getPlayerFromModel(model)
+    if not player then return false end
+    if not localPlayer.Team or not player.Team then
+        return false
+    end
+    
+    return localPlayer.Team == player.Team
+end
+
+local function getNearestPlayerToCursor()
+    if not localPlayer.Character or not localPlayer.Character:FindFirstChild("Head") then
+        return nil
+    end
+    
+    local mouse = localPlayer:GetMouse()
+    local cursorPosition = Vector2.new(mouse.X, mouse.Y)
+    
+    local nearestModel = nil
+    local shortestDistance = math.huge
+    
+    -- Search through all workspace children for player models
+    for _, model in pairs(workspace:GetChildren()) do
+        if isPlayerModel(model) then
+            -- Apply filters only if they are enabled
+            local passesTeamCheck = not isTeammate(model)
+            local passesFrontCheck = isPlayerInFront(model)
+            local passesVisibilityCheck = isPlayerVisible(model)
+            local passesWallCheck = not hasWallBetween(model)
+            
+            -- Only filter if the respective checks are enabled
+            if passesTeamCheck and passesFrontCheck and passesVisibilityCheck and passesWallCheck then
+                local head = model:FindFirstChild("Head")
+                if head then
+                    local headPosition = head.Position
+                    local screenPosition, onScreen = Camera:WorldToViewportPoint(headPosition)
+                    
+                    if onScreen and screenPosition.Z > 0 then
+                        local screenPos2D = Vector2.new(screenPosition.X, screenPosition.Y)
+                        local distance = getScreenDistance(cursorPosition, screenPos2D)
+                        
+                        if distance < shortestDistance and distance <= MAX_FOV then
+                            shortestDistance = distance
+                            nearestModel = model
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestModel
+end
+
+local function getTargetPart(model)
+    if not TARGET_HEAD then
+        return model:FindFirstChild("HumanoidRootPart")
+    end
+    return model:FindFirstChild("Head")
+end
+
+local function aimAtPlayer(model)
+    if not model then
+        return
+    end
+    
+    local targetPart = getTargetPart(model)
+    if not targetPart then return end
+    
+    local targetPosition = targetPart.Position
+    local currentCFrame = Camera.CFrame
+    local targetCFrame = CFrame.lookAt(Camera.CFrame.Position, targetPosition)
+    
+    if INSTANT_SNAP then
+        local randomOffset = (math.random(-1, 1) * 0.0005)
+        local smoothValue = SMOOTHNESS + randomOffset
+        Camera.CFrame = currentCFrame:Lerp(targetCFrame, smoothValue)
+    else
+        local smoothValue = SMOOTHNESS * 0.5
+        Camera.CFrame = currentCFrame:Lerp(targetCFrame, smoothValue)
+    end
+end
+
+local function isTargetValid(model)
+    if not model then return false end
+    if not isPlayerModel(model) then return false end
+    if not getTargetPart(model) then return false end
+    
+    local humanoid = model:FindFirstChild("Humanoid")
+    if humanoid and humanoid.Health <= 0 then return false end
+    
+    return true
+end
+
+local function updateTarget()
+    if aimbotActive then
+        -- Always get the closest target to cursor, allowing fluid switching
+        targetPlayer = getNearestPlayerToCursor()
+    else
+        -- Clear target when not aiming
+        targetPlayer = nil
+    end
+end
+
+local function onInputBegan(input)
+    if input.UserInputType == AIMBOT_KEY and AIMBOT_ENABLED then
+        aimbotActive = true
+    end
+end
+
+local function onInputEnded(input)
+    if input.UserInputType == AIMBOT_KEY then
+        aimbotActive = false
+        targetPlayer = nil
+    end
+end
+
+UserInputService.InputBegan:Connect(onInputBegan)
+UserInputService.InputEnded:Connect(onInputEnded)
+
+RunService.RenderStepped:Connect(function()
+    if AIMBOT_ENABLED then
+        updateTarget()
+        if aimbotActive and targetPlayer then
+            aimAtPlayer(targetPlayer)
+        end
+    end
+end)
+
+-- CONFIGURATION FUNCTIONS --
+getgenv().setAimbotEnabled = function(enabled)
+    AIMBOT_ENABLED = enabled
+end
+
+getgenv().setAimbotKey = function(key)
+    AIMBOT_KEY = key
+end
+
+getgenv().setAimbotFOV = function(fov)
+    MAX_FOV = fov
+end
+
+getgenv().setAimbotSmoothness = function(smooth)
+    SMOOTHNESS = smooth
+end
+
+getgenv().setInstantSnap = function(snap)
+    INSTANT_SNAP = snap
+end
+
+getgenv().setWallCheck = function(check)
+    WALL_CHECK = check
+end
+
+getgenv().setTeamCheck = function(check)
+    TEAM_CHECK = check
+end
+
+getgenv().setTargetHead = function(head)
+    TARGET_HEAD = head
+end
+
+getgenv().clearTarget = function()
+    targetPlayer = nil
+    aimbotActive = false
+end
+
+getgenv().forceTarget = function(playerName)
+    for _, model in pairs(workspace:GetChildren()) do
+        if isPlayerModel(model) then
+            local player = getPlayerFromModel(model)
+            if player and player.Name == playerName then
+                targetPlayer = model
+                return true
+            end
+        end
+    end
+    return false
+end
+
+getgenv().getCurrentTarget = function()
+    if targetPlayer then
+        local player = getPlayerFromModel(targetPlayer)
+        return player and player.Name or targetPlayer.Name or "Unknown"
+    end
+    return "None"
+end
